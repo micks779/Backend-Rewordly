@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import logging
@@ -16,7 +16,7 @@ app = Flask(__name__)
 CORS(app, origins=['*'])  # Allow all origins for deployment - can be restricted later
 
 # Configure OpenAI
-openai.api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -44,7 +44,7 @@ def reword_text():
             return jsonify({"error": "No tone instructions provided"}), 400
         
         # Check if OpenAI API key is available
-        if not openai.api_key:
+        if not client.api_key:
             # Fallback to mock response
             mock_response = f"[Reworded with tone: {tone_instructions}] {selected_text}"
             logger.info(f"Mock rewording text with tone: {tone_instructions}")
@@ -67,7 +67,7 @@ def reword_text():
         """
         
         # Call OpenAI API
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a professional email writing assistant. Reword the given text according to the specified tone while maintaining the original meaning and context."},
@@ -88,12 +88,9 @@ def reword_text():
             "tone_instructions": tone_instructions
         })
         
-    except openai.error.OpenAIError as e:
+    except Exception as e:
         logger.error(f"OpenAI API error: {str(e)}")
         return jsonify({"error": "AI service error. Please try again."}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/api/compose', methods=['POST'])
 def compose_email():
@@ -112,7 +109,7 @@ def compose_email():
             return jsonify({"error": "No composition instructions provided"}), 400
         
         # Check if OpenAI API key is available
-        if not openai.api_key:
+        if not client.api_key:
             # Fallback to mock response
             mock_email = f"""Dear [Recipient],
 
@@ -143,7 +140,7 @@ Best regards,
         """
         
         # Call OpenAI API
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a professional email writing assistant. Compose emails that are clear, professional, and appropriate for business communication."},
@@ -163,12 +160,9 @@ Best regards,
             "composition_instructions": composition_instructions
         })
         
-    except openai.error.OpenAIError as e:
+    except Exception as e:
         logger.error(f"OpenAI API error: {str(e)}")
         return jsonify({"error": "AI service error. Please try again."}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.errorhandler(404)
 def not_found(error):
@@ -182,7 +176,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"🚀 Starting Rewordly API server on http://localhost:{port}")
     
-    if not openai.api_key:
+    if not client.api_key:
         print("⚠️  No OpenAI API key found - running in mock mode")
     else:
         print("✅ OpenAI API key configured - running in production mode")
