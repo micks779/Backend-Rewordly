@@ -164,6 +164,88 @@ Best regards,
         logger.error(f"OpenAI API error: {str(e)}")
         return jsonify({"error": "AI service error. Please try again."}), 500
 
+@app.route('/api/analyze-email', methods=['POST'])
+def analyze_email():
+    """
+    Analyze email content and provide summary
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        email_content = data.get('emailContent', '').strip()
+        email_id = data.get('emailId', '').strip()
+        
+        if not email_content:
+            return jsonify({"error": "No email content provided"}), 400
+        
+        if not email_id:
+            return jsonify({"error": "No email ID provided"}), 400
+        
+        # Check if OpenAI API key is available
+        if not client.api_key:
+            # Fallback to mock response
+            mock_summary = f"Mock analysis of email: {email_content[:50]}..."
+            logger.info(f"Mock analyzing email: {email_id}")
+            
+            return jsonify({
+                "success": True,
+                "summary": mock_summary,
+                "actionItems": [],
+                "priority": "Medium",
+                "sentiment": "Neutral",
+                "category": "Standard",
+                "rawAnalysis": mock_summary
+            })
+        
+        # Create the prompt for OpenAI
+        prompt = f"""
+        Analyze this email and provide a simple summary:
+
+        **Summary**
+        Write a single sentence (20-30 words) describing the main purpose or key message of this email.
+
+        Email content:
+        {email_content}
+        """
+        
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI assistant providing email analysis. Focus on providing a simple, clear summary of the email content. Format your response exactly as shown in the prompt. Keep the summary concise (20-30 words). Focus on the main purpose or key message of the email."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.3
+        )
+        
+        analysis_text = response.choices[0].message.content.strip()
+        
+        # Parse the response to extract summary
+        summary = analysis_text
+        if "**Summary**" in analysis_text:
+            summary_match = analysis_text.split("**Summary**")[1].split("**")[0] if "**" in analysis_text.split("**Summary**")[1] else analysis_text.split("**Summary**")[1]
+            summary = summary_match.strip()
+        
+        logger.info(f"Successfully analyzed email: {email_id}")
+        
+        return jsonify({
+            "success": True,
+            "summary": summary,
+            "actionItems": [],
+            "priority": "Medium",
+            "sentiment": "Neutral",
+            "category": "Standard",
+            "rawAnalysis": analysis_text
+        })
+        
+    except Exception as e:
+        logger.error(f"Email analysis error: {str(e)}")
+        return jsonify({"error": "AI service error. Please try again."}), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({"error": "Endpoint not found"}), 404
